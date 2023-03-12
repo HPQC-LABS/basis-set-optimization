@@ -5,7 +5,7 @@ import re
 
 from scipy import optimize
 
-VERBOSITY = 0
+VERBOSITY = 9
 
 def parse_basis_str(slug):
     numbers_and_letters = re.findall(r'[A-Za-z]+|\d+', slug)
@@ -20,7 +20,7 @@ def decaying_nums(n):
 
 def get_basis_substring(exponent, orbital):
     substring = f'''
-    Ne  {orbital}
+    Ar  {orbital}
         {exponent}              1.0'''
     return substring
 
@@ -47,7 +47,7 @@ def atomic_energy(
     mol, basis_str, exp_array=None, return_J=False,
 ):
     basis_string = get_basis_string(basis_str, exponents, exp_array)
-    mol.basis = {'Ne': pyscf.gto.basis.parse(basis_string)}
+    mol.basis = {'Ar': pyscf.gto.basis.parse(basis_string)}
 
     mol.verbose = VERBOSITY
     mol.build()
@@ -66,24 +66,6 @@ def atomic_energy(
         grad_E = np.array(jac.exp)
         return e, grad_E
 
-# def grad_atomic_energy(exponents, mol, basis_str, exp_array=None):
-#     basis_string = get_basis_string(basis_str, exponents, exp_array)
-#     mol.basis = {'Ne': pyscf.gto.basis.parse(basis_string)}
-    
-#     mol.verbose = VERBOSITY
-#     mol.build()
-
-#     mf = scf.RHF(mol)
-#     mf.kernel()
-#     jac = mf.energy_grad()
-
-#     print(f"exp = {exponents}")
-#     print(f"grad_E = {jac.exp}")
-
-#     grad_E = np.array(jac.exp)
-
-#     return grad_E
-
 def minimize_energy(mol, basis_str, exp_array=None, use_Jacobian=True):
     x0 = exp_array[:, 0]
     print(x0)
@@ -93,7 +75,7 @@ def minimize_energy(mol, basis_str, exp_array=None, use_Jacobian=True):
         atomic_energy,
         x0,
         args=(mol, basis_str, exp_array, use_Jacobian),
-        method="Nelder-Mead",
+        method="SLSQP",
         jac=use_Jacobian,
         hess=None,
         hessp=None,
@@ -103,7 +85,7 @@ def minimize_energy(mol, basis_str, exp_array=None, use_Jacobian=True):
         options={"maxfev": 100000, "ftol": 1e-12, "maxiter": 100000},
     )
     
-    final_E = atomic_energy(mol, res.x, basis_str)
+    final_E = atomic_energy(res.x, mol, basis_str)
     print(res)
     print(f"E = {final_E}")
     
@@ -127,10 +109,10 @@ def minimize_energy(mol, basis_str, exp_array=None, use_Jacobian=True):
 
 if __name__ == "__main__":
     mol = gto.Mole()
-    mol.atom = 'Ne 0 0 0'
+    mol.atom = 'Ar 0 0 0'
 
-    basis = "4s2p"
-    N = 6
+    basis = "3s2p"
+    N = 5
     
     exps = np.zeros((N, 2))
     exps[:, 0] = np.array([0.5 * (N - i) for i in range(N)])
