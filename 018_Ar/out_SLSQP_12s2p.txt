@@ -1,0 +1,898 @@
+#INFO: **** input file is /Users/vtan/basis-set-optimization/018_Ar/input.py ****
+#!/usr/bin/env python
+
+import pyscf
+from pyscfad import gto, scf
+import numpy as np
+import re
+
+from scipy import optimize
+
+VERBOSITY = 9
+
+def parse_basis_str(slug):
+    numbers_and_letters = re.findall(r'[A-Za-z]+|\d+', slug)
+    numbers_with_letters = [
+        [int(numbers_and_letters[i]), numbers_and_letters[i+1].capitalize()]
+        for i in range(0, len(numbers_and_letters), 2)
+    ]
+    return numbers_with_letters
+
+def decaying_nums(n):
+    return np.array([0.5 * (n - i) for i in range(n)])
+
+def get_basis_substring(exponent, orbital):
+    substring = f'''
+    Ar  {orbital}
+        {exponent}              1.0'''
+    return substring
+
+def get_basis_string(basis_str, exponents, exp_array=None):
+    basis_set = parse_basis_str(basis_str)
+    basis_nums = [num for [num, _] in basis_set]
+    basis_cum_nums = np.cumsum(basis_nums)
+
+    if exp_array is None:
+        exp_array = np.zeros((exponents.size, 2))
+
+    exp_array[np.where(exp_array[:, 1] == 0), 0] = exponents[np.where(exp_array[:, 1] == 0)]
+
+    basis_string = ''.join([''.join([
+        get_basis_substring(exp_array[i, 0], orbital) if j == 0 else
+        get_basis_substring(exp_array[i + basis_cum_nums[j-1], 0], orbital)
+        for i in range(num)
+    ]) for j, [num, orbital] in enumerate(basis_set)])
+
+    return basis_string
+
+def atomic_energy(exponents, basis_str, exp_array=None):
+    mol = gto.Mole()
+    mol.atom = 'Ar 0 0 0'  # in Angstrom
+
+    basis_string = get_basis_string(basis_str, exponents, exp_array)
+    mol.basis = {'Ar': pyscf.gto.basis.parse(basis_string)}
+
+    mol.verbose = VERBOSITY
+    mol.build()
+
+    mf = scf.RHF(mol)
+    e = mf.kernel()
+
+    print(f"exp = {exponents}")
+    print(f"E = {e}")
+
+    return e
+
+def grad_atomic_energy(exponents, basis_str, exp_array=None):
+    mol = gto.Mole()
+    mol.atom = 'Ar 0 0 0'  # in Angstrom
+
+    basis_string = get_basis_string(basis_str, exponents, exp_array)
+    mol.basis = {'Ar': pyscf.gto.basis.parse(basis_string)}
+    
+    mol.verbose = VERBOSITY
+    mol.build()
+
+    mf = scf.RHF(mol)
+    mf.kernel()
+    jac = mf.energy_grad()
+
+    print(f"exp = {exponents}")
+    print(f"grad_E = {jac.exp}")
+
+    grad_E = np.array(jac.exp)
+
+    return grad_E
+
+def minimize_energy(basis_str, exp_array=None):
+    x0 = exp_array[:, 0]
+    bnds = ((1e-9, None) for _ in range(exp_array.shape[0]))
+
+    res = optimize.minimize(
+        atomic_energy,
+        x0,
+        args=(basis_str, exp_array),
+        method="SLSQP",
+        jac=grad_atomic_energy,
+        hess=None,
+        hessp=None,
+        bounds=bnds,
+        tol=1e-9,
+        callback=None,
+        options={"maxfev": 10000, "ftol": 1e-9},
+    )
+    
+    print(res)
+    print(f"E = {atomic_energy(res.x, basis_str)}")
+    print(f"exp = [{','.join(['{:.16e}'.format(x) for x in res.x])}]")
+    
+exps = np.zeros((14, 2))
+#exps[:, 0] = decaying_nums(5)
+exps_old = np.array([4.6988712134173084e+06,1.1747178033543271e+06,2.9367945083858178e+05,7.3419865393677101e+04,1.8353927627435987e+04,2.2341424145819028e+03,4.5688904996449571e+02,1.2173317272260677e+02,3.7593061247508530e+01,4.7412722556720146e+00,3.9120358491841306e-01,8.5986297237246045e+00,4.9084868336327880e-01])
+exps[1:, 0] = exps_old[:]
+exps[0, 0] = np.max(exps_old) * 4.0
+
+basis = "12s2p"
+
+minimize_energy(basis, exps)
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Darwin', node='Vinnas-Air', release='19.6.0', version='Darwin Kernel Version 19.6.0: Tue Jun 21 21:18:39 PDT 2022; root:xnu-6153.141.66~1/RELEASE_X86_64', machine='x86_64', processor='i386')  Threads 1
+Python 3.8.8 (default, Apr 13 2021, 12:59:45) 
+[Clang 10.0.0 ]
+numpy 1.24.2  scipy 1.10.1
+Date: Sun Mar 12 00:08:50 2023
+PySCF version 2.1.1
+PySCF path  /Users/vtan/ve_pyscfad/lib/python3.8/site-packages/pyscf
+
+[CONFIG] DEBUG = False
+[CONFIG] MAX_MEMORY = 4000
+[CONFIG] TMPDIR = /var/folders/c6/fyjd84g92vqcf03tnvqp486c0000gn/T/
+[CONFIG] UNIT = angstrom
+[CONFIG] VERBOSE = 3
+[CONFIG] conf_file = /Users/vtan/.pyscf_conf.py
+[CONFIG] pyscf_numpy_backend = jax
+[CONFIG] pyscf_scipy_backend = jax
+[CONFIG] pyscf_scipy_linalg_backend = pyscfad
+[CONFIG] pyscfad = True
+[CONFIG] pyscfad_ccsd_implicit_diff = True
+[CONFIG] pyscfad_scf_implicit_diff = True
+[INPUT] verbose = 9
+[INPUT] max_memory = 4000 
+[INPUT] num. atoms = 1
+[INPUT] num. electrons = 18
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = angstrom
+[INPUT] Symbol           X                Y                Z      unit          X                Y                Z       unit  Magmom
+[INPUT]  1 Ar     0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr   0.0
+[INPUT] ---------------- BASIS SET ---------------- 
+[INPUT] l, kappa, [nprim/nctr], expnt,             c_1 c_2 ...
+[INPUT] Ar
+[INPUT] 0    0    [1    /1   ]  18795484.8537        1
+[INPUT] 0    0    [1    /1   ]  4698871.21342        1
+[INPUT] 0    0    [1    /1   ]  1174717.80335        1
+[INPUT] 0    0    [1    /1   ]  293679.450839        1
+[INPUT] 0    0    [1    /1   ]  73419.8653937        1
+[INPUT] 0    0    [1    /1   ]  18353.9276274        1
+[INPUT] 0    0    [1    /1   ]  2234.14241458        1
+[INPUT] 0    0    [1    /1   ]  456.889049964        1
+[INPUT] 0    0    [1    /1   ]  121.733172723        1
+[INPUT] 0    0    [1    /1   ]  37.5930612475        1
+[INPUT] 0    0    [1    /1   ]  4.74127225567        1
+[INPUT] 0    0    [1    /1   ]  0.391203584918       1
+[INPUT] 1    0    [1    /1   ]  8.59862972372        1
+[INPUT] 1    0    [1    /1   ]  0.490848683363       1
+
+nuclear repulsion = 0
+number of shells = 14
+number of NR pGTOs = 18
+number of NR cGTOs = 18
+basis = {'Ar': [[0, [18795484.853669234, 1.0]], [0, [4698871.213417308, 1.0]], [0, [1174717.803354327, 1.0]], [0, [293679.4508385818, 1.0]], [0, [73419.8653936771, 1.0]], [0, [18353.927627435987, 1.0]], [0, [2234.142414581903, 1.0]], [0, [456.8890499644957, 1.0]], [0, [121.73317272260677, 1.0]], [0, [37.59306124750853, 1.0]], [0, [4.741272255672015, 1.0]], [0, [0.39120358491841306, 1.0]], [1, [8.598629723724605, 1.0]], [1, [0.4908486833632788, 1.0]]]}
+ecp = {}
+bas 0, expnt(s) = [18795484.85366923]
+bas 1, expnt(s) = [4698871.21341731]
+bas 2, expnt(s) = [1174717.80335433]
+bas 3, expnt(s) = [293679.45083858]
+bas 4, expnt(s) = [73419.86539368]
+bas 5, expnt(s) = [18353.92762744]
+bas 6, expnt(s) = [2234.14241458]
+bas 7, expnt(s) = [456.88904996]
+bas 8, expnt(s) = [121.73317272]
+bas 9, expnt(s) = [37.59306125]
+bas 10, expnt(s) = [4.74127226]
+bas 11, expnt(s) = [0.39120358]
+bas 12, expnt(s) = [8.59862972]
+bas 13, expnt(s) = [0.49084868]
+CPU time:         1.06
+arg.atm = [[18 20  1 23  0  0]]
+arg.bas = [[ 0  0  1  1  0 24 25  0]
+ [ 0  0  1  1  0 26 27  0]
+ [ 0  0  1  1  0 28 29  0]
+ [ 0  0  1  1  0 30 31  0]
+ [ 0  0  1  1  0 32 33  0]
+ [ 0  0  1  1  0 34 35  0]
+ [ 0  0  1  1  0 36 37  0]
+ [ 0  0  1  1  0 38 39  0]
+ [ 0  0  1  1  0 40 41  0]
+ [ 0  0  1  1  0 42 43  0]
+ [ 0  0  1  1  0 44 45  0]
+ [ 0  0  1  1  0 46 47  0]
+ [ 0  1  1  1  0 48 49  0]
+ [ 0  1  1  1  0 50 51  0]]
+arg.env = [0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 1.87954849e+07 7.21199097e+05 4.69887121e+06 2.54982386e+05
+ 1.17471780e+06 9.01498871e+04 2.93679451e+05 3.18727983e+04
+ 7.34198654e+04 1.12687362e+04 1.83539276e+04 3.98393079e+03
+ 2.23414241e+03 8.21009466e+02 4.56889050e+02 2.49673866e+02
+ 1.21733173e+02 9.25916301e+01 3.75930612e+01 3.83571025e+01
+ 4.74127226e+00 8.11775977e+00 3.91203585e-01 1.24973273e+00
+ 8.59862972e+00 4.29557150e+01 4.90848683e-01 1.19858525e+00]
+ecpbas  = []
+Set gradient conv threshold to 3.16228e-05
+Nelec from initial guess = 17.31997542584935
+cond(S) = 56.39526514662862
+E1 = -688.8312841655792  E_coul = 184.91537499636783
+init E= -503.915909169211
+    CPU time for initialize scf      0.15 sec, wall time      0.15 sec
+  HOMO = -0.680897819666845  LUMO = 85.0613322692788
+  mo_energy =
+[-1.21650495e+02 -1.32811426e+01 -7.62160364e+00 -7.62160364e+00
+ -7.62160364e+00 -1.65070622e+00 -6.80897820e-01 -6.80897820e-01
+ -6.80897820e-01  8.50613323e+01  6.77228652e+02  3.93503191e+03
+  2.96196452e+04  1.54738903e+05  6.64892046e+05  2.71962805e+06
+  1.10459661e+07  4.65100872e+07]
+E1 = -706.5849321798701  E_coul = 198.94564234453657
+cycle= 1 E= -507.639289835333  delta_E= -3.72  |g|= 0.317  |ddm|= 0.301
+    CPU time for cycle= 1      0.37 sec, wall time      0.37 sec
+diis-norm(errvec)=0.420501
+diis-c [-0.17682113  1.        ]
+  HOMO = -0.236276575118712  LUMO = 86.394361736767
+  mo_energy =
+[-1.20262475e+02 -1.22530430e+01 -6.65306743e+00 -6.65306743e+00
+ -6.65306743e+00 -1.16348458e+00 -2.36276575e-01 -2.36276575e-01
+ -2.36276575e-01  8.63943617e+01  6.78599269e+02  3.93628357e+03
+  2.96207340e+04  1.54739920e+05  6.64893033e+05  2.71962902e+06
+  1.10459671e+07  4.65100881e+07]
+E1 = -706.5535010225527  E_coul = 198.91378329655515
+cycle= 2 E= -507.639717725998  delta_E= -0.000428  |g|= 0.00474  |ddm|= 0.0143
+    CPU time for cycle= 2      0.12 sec, wall time      0.12 sec
+diis-norm(errvec)=0.00504168
+diis-c [-2.53733014e-05 -5.06259892e-04  1.00050626e+00]
+  HOMO = -0.236451774901736  LUMO = 86.3908435800202
+  mo_energy =
+[-1.20271114e+02 -1.22542316e+01 -6.65490834e+00 -6.65490834e+00
+ -6.65490834e+00 -1.16354934e+00 -2.36451775e-01 -2.36451775e-01
+ -2.36451775e-01  8.63908436e+01  6.78588685e+02  3.93626769e+03
+  2.96207148e+04  1.54739900e+05  6.64893013e+05  2.71962900e+06
+  1.10459670e+07  4.65100881e+07]
+E1 = -706.5530608388187  E_coul = 198.9133430027451
+cycle= 3 E= -507.639717836074  delta_E= -1.1e-07  |g|= 9.48e-05  |ddm|= 0.000202
+    CPU time for cycle= 3      0.02 sec, wall time      0.02 sec
+diis-norm(errvec)=0.00012677
+diis-c [-3.95755563e-10  3.34164168e-05 -2.54629045e-02  1.02542949e+00]
+  HOMO = -0.23645398661671  LUMO = 86.3907989236711
+  mo_energy =
+[-1.20271227e+02 -1.22542473e+01 -6.65493530e+00 -6.65493530e+00
+ -6.65493530e+00 -1.16354999e+00 -2.36453987e-01 -2.36453987e-01
+ -2.36453987e-01  8.63907989e+01  6.78588568e+02  3.93626754e+03
+  2.96207146e+04  1.54739900e+05  6.64893013e+05  2.71962900e+06
+  1.10459670e+07  4.65100881e+07]
+E1 = -706.5530536012826  E_coul = 198.91333576516874
+cycle= 4 E= -507.639717836114  delta_E= -4.02e-11  |g|= 3.74e-07  |ddm|= 3.44e-06
+    CPU time for cycle= 4      0.02 sec, wall time      0.02 sec
+E1 = -706.5530536012826  E_coul = 198.91333576516874
+  HOMO = -0.236453970314514  LUMO = 86.3907992617131
+  mo_energy =
+[-1.20271226e+02 -1.22542472e+01 -6.65493514e+00 -6.65493514e+00
+ -6.65493514e+00 -1.16354999e+00 -2.36453970e-01 -2.36453970e-01
+ -2.36453970e-01  8.63907993e+01  6.78588569e+02  3.93626754e+03
+  2.96207146e+04  1.54739900e+05  6.64893013e+05  2.71962900e+06
+  1.10459670e+07  4.65100881e+07]
+E1 = -706.5530536382827  E_coul = 198.91333580216914
+Extra cycle  E= -507.639717836114  delta_E= 3.41e-13  |g|= 6.45e-09  |ddm|= 1.64e-08
+    CPU time for scf_cycle      0.69 sec, wall time      0.69 sec
+exp = [1.87954849e+07 4.69887121e+06 1.17471780e+06 2.93679451e+05
+ 7.34198654e+04 1.83539276e+04 2.23414241e+03 4.56889050e+02
+ 1.21733173e+02 3.75930612e+01 4.74127226e+00 3.91203585e-01
+ 8.59862972e+00 4.90848683e-01]
+E = -507.6397178361135
+#INFO: **** input file is /Users/vtan/basis-set-optimization/018_Ar/input.py ****
+#!/usr/bin/env python
+
+import pyscf
+from pyscfad import gto, scf
+import numpy as np
+import re
+
+from scipy import optimize
+
+VERBOSITY = 9
+
+def parse_basis_str(slug):
+    numbers_and_letters = re.findall(r'[A-Za-z]+|\d+', slug)
+    numbers_with_letters = [
+        [int(numbers_and_letters[i]), numbers_and_letters[i+1].capitalize()]
+        for i in range(0, len(numbers_and_letters), 2)
+    ]
+    return numbers_with_letters
+
+def decaying_nums(n):
+    return np.array([0.5 * (n - i) for i in range(n)])
+
+def get_basis_substring(exponent, orbital):
+    substring = f'''
+    Ar  {orbital}
+        {exponent}              1.0'''
+    return substring
+
+def get_basis_string(basis_str, exponents, exp_array=None):
+    basis_set = parse_basis_str(basis_str)
+    basis_nums = [num for [num, _] in basis_set]
+    basis_cum_nums = np.cumsum(basis_nums)
+
+    if exp_array is None:
+        exp_array = np.zeros((exponents.size, 2))
+
+    exp_array[np.where(exp_array[:, 1] == 0), 0] = exponents[np.where(exp_array[:, 1] == 0)]
+
+    basis_string = ''.join([''.join([
+        get_basis_substring(exp_array[i, 0], orbital) if j == 0 else
+        get_basis_substring(exp_array[i + basis_cum_nums[j-1], 0], orbital)
+        for i in range(num)
+    ]) for j, [num, orbital] in enumerate(basis_set)])
+
+    return basis_string
+
+def atomic_energy(exponents, basis_str, exp_array=None):
+    mol = gto.Mole()
+    mol.atom = 'Ar 0 0 0'  # in Angstrom
+
+    basis_string = get_basis_string(basis_str, exponents, exp_array)
+    mol.basis = {'Ar': pyscf.gto.basis.parse(basis_string)}
+
+    mol.verbose = VERBOSITY
+    mol.build()
+
+    mf = scf.RHF(mol)
+    e = mf.kernel()
+
+    print(f"exp = {exponents}")
+    print(f"E = {e}")
+
+    return e
+
+def grad_atomic_energy(exponents, basis_str, exp_array=None):
+    mol = gto.Mole()
+    mol.atom = 'Ar 0 0 0'  # in Angstrom
+
+    basis_string = get_basis_string(basis_str, exponents, exp_array)
+    mol.basis = {'Ar': pyscf.gto.basis.parse(basis_string)}
+    
+    mol.verbose = VERBOSITY
+    mol.build()
+
+    mf = scf.RHF(mol)
+    mf.kernel()
+    jac = mf.energy_grad()
+
+    print(f"exp = {exponents}")
+    print(f"grad_E = {jac.exp}")
+
+    grad_E = np.array(jac.exp)
+
+    return grad_E
+
+def minimize_energy(basis_str, exp_array=None):
+    x0 = exp_array[:, 0]
+    bnds = ((1e-9, None) for _ in range(exp_array.shape[0]))
+
+    res = optimize.minimize(
+        atomic_energy,
+        x0,
+        args=(basis_str, exp_array),
+        method="SLSQP",
+        jac=grad_atomic_energy,
+        hess=None,
+        hessp=None,
+        bounds=bnds,
+        tol=1e-9,
+        callback=None,
+        options={"maxfev": 10000, "ftol": 1e-9},
+    )
+    
+    print(res)
+    print(f"E = {atomic_energy(res.x, basis_str)}")
+    print(f"exp = [{','.join(['{:.16e}'.format(x) for x in res.x])}]")
+    
+exps = np.zeros((14, 2))
+#exps[:, 0] = decaying_nums(5)
+exps_old = np.array([4.6988712134173084e+06,1.1747178033543271e+06,2.9367945083858178e+05,7.3419865393677101e+04,1.8353927627435987e+04,2.2341424145819028e+03,4.5688904996449571e+02,1.2173317272260677e+02,3.7593061247508530e+01,4.7412722556720146e+00,3.9120358491841306e-01,8.5986297237246045e+00,4.9084868336327880e-01])
+exps[1:, 0] = exps_old[:]
+exps[0, 0] = np.max(exps_old) * 4.0
+
+basis = "12s2p"
+
+minimize_energy(basis, exps)
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Darwin', node='Vinnas-Air', release='19.6.0', version='Darwin Kernel Version 19.6.0: Tue Jun 21 21:18:39 PDT 2022; root:xnu-6153.141.66~1/RELEASE_X86_64', machine='x86_64', processor='i386')  Threads 1
+Python 3.8.8 (default, Apr 13 2021, 12:59:45) 
+[Clang 10.0.0 ]
+numpy 1.24.2  scipy 1.10.1
+Date: Sun Mar 12 00:08:51 2023
+PySCF version 2.1.1
+PySCF path  /Users/vtan/ve_pyscfad/lib/python3.8/site-packages/pyscf
+
+[CONFIG] DEBUG = False
+[CONFIG] MAX_MEMORY = 4000
+[CONFIG] TMPDIR = /var/folders/c6/fyjd84g92vqcf03tnvqp486c0000gn/T/
+[CONFIG] UNIT = angstrom
+[CONFIG] VERBOSE = 3
+[CONFIG] conf_file = /Users/vtan/.pyscf_conf.py
+[CONFIG] pyscf_numpy_backend = jax
+[CONFIG] pyscf_scipy_backend = jax
+[CONFIG] pyscf_scipy_linalg_backend = pyscfad
+[CONFIG] pyscfad = True
+[CONFIG] pyscfad_ccsd_implicit_diff = True
+[CONFIG] pyscfad_scf_implicit_diff = True
+[INPUT] verbose = 9
+[INPUT] max_memory = 4000 
+[INPUT] num. atoms = 1
+[INPUT] num. electrons = 18
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = angstrom
+[INPUT] Symbol           X                Y                Z      unit          X                Y                Z       unit  Magmom
+[INPUT]  1 Ar     0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr   0.0
+[INPUT] ---------------- BASIS SET ---------------- 
+[INPUT] l, kappa, [nprim/nctr], expnt,             c_1 c_2 ...
+[INPUT] Ar
+[INPUT] 0    0    [1    /1   ]  18795484.8537        1
+[INPUT] 0    0    [1    /1   ]  4698871.21342        1
+[INPUT] 0    0    [1    /1   ]  1174717.80335        1
+[INPUT] 0    0    [1    /1   ]  293679.450839        1
+[INPUT] 0    0    [1    /1   ]  73419.8653937        1
+[INPUT] 0    0    [1    /1   ]  18353.9276274        1
+[INPUT] 0    0    [1    /1   ]  2234.14241458        1
+[INPUT] 0    0    [1    /1   ]  456.889049964        1
+[INPUT] 0    0    [1    /1   ]  121.733172723        1
+[INPUT] 0    0    [1    /1   ]  37.5930612475        1
+[INPUT] 0    0    [1    /1   ]  4.74127225567        1
+[INPUT] 0    0    [1    /1   ]  0.391203584918       1
+[INPUT] 1    0    [1    /1   ]  8.59862972372        1
+[INPUT] 1    0    [1    /1   ]  0.490848683363       1
+
+nuclear repulsion = 0
+number of shells = 14
+number of NR pGTOs = 18
+number of NR cGTOs = 18
+basis = {'Ar': [[0, [18795484.853669234, 1.0]], [0, [4698871.213417308, 1.0]], [0, [1174717.803354327, 1.0]], [0, [293679.4508385818, 1.0]], [0, [73419.8653936771, 1.0]], [0, [18353.927627435987, 1.0]], [0, [2234.142414581903, 1.0]], [0, [456.8890499644957, 1.0]], [0, [121.73317272260677, 1.0]], [0, [37.59306124750853, 1.0]], [0, [4.741272255672015, 1.0]], [0, [0.39120358491841306, 1.0]], [1, [8.598629723724605, 1.0]], [1, [0.4908486833632788, 1.0]]]}
+ecp = {}
+bas 0, expnt(s) = [18795484.85366923]
+bas 1, expnt(s) = [4698871.21341731]
+bas 2, expnt(s) = [1174717.80335433]
+bas 3, expnt(s) = [293679.45083858]
+bas 4, expnt(s) = [73419.86539368]
+bas 5, expnt(s) = [18353.92762744]
+bas 6, expnt(s) = [2234.14241458]
+bas 7, expnt(s) = [456.88904996]
+bas 8, expnt(s) = [121.73317272]
+bas 9, expnt(s) = [37.59306125]
+bas 10, expnt(s) = [4.74127226]
+bas 11, expnt(s) = [0.39120358]
+bas 12, expnt(s) = [8.59862972]
+bas 13, expnt(s) = [0.49084868]
+CPU time:         2.01
+arg.atm = [[18 20  1 23  0  0]]
+arg.bas = [[ 0  0  1  1  0 24 25  0]
+ [ 0  0  1  1  0 26 27  0]
+ [ 0  0  1  1  0 28 29  0]
+ [ 0  0  1  1  0 30 31  0]
+ [ 0  0  1  1  0 32 33  0]
+ [ 0  0  1  1  0 34 35  0]
+ [ 0  0  1  1  0 36 37  0]
+ [ 0  0  1  1  0 38 39  0]
+ [ 0  0  1  1  0 40 41  0]
+ [ 0  0  1  1  0 42 43  0]
+ [ 0  0  1  1  0 44 45  0]
+ [ 0  0  1  1  0 46 47  0]
+ [ 0  1  1  1  0 48 49  0]
+ [ 0  1  1  1  0 50 51  0]]
+arg.env = [0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 1.87954849e+07 7.21199097e+05 4.69887121e+06 2.54982386e+05
+ 1.17471780e+06 9.01498871e+04 2.93679451e+05 3.18727983e+04
+ 7.34198654e+04 1.12687362e+04 1.83539276e+04 3.98393079e+03
+ 2.23414241e+03 8.21009466e+02 4.56889050e+02 2.49673866e+02
+ 1.21733173e+02 9.25916301e+01 3.75930612e+01 3.83571025e+01
+ 4.74127226e+00 8.11775977e+00 3.91203585e-01 1.24973273e+00
+ 8.59862972e+00 4.29557150e+01 4.90848683e-01 1.19858525e+00]
+ecpbas  = []
+Set gradient conv threshold to 3.16228e-05
+Nelec from initial guess = 17.31997542584935
+cond(S) = 56.39526514662862
+E1 = -688.8312841655792  E_coul = 184.91537499636783
+init E= -503.915909169211
+    CPU time for initialize scf      0.02 sec, wall time      0.02 sec
+  HOMO = -0.680897819666845  LUMO = 85.0613322692788
+  mo_energy =
+[-1.21650495e+02 -1.32811426e+01 -7.62160364e+00 -7.62160364e+00
+ -7.62160364e+00 -1.65070622e+00 -6.80897820e-01 -6.80897820e-01
+ -6.80897820e-01  8.50613323e+01  6.77228652e+02  3.93503191e+03
+  2.96196452e+04  1.54738903e+05  6.64892046e+05  2.71962805e+06
+  1.10459661e+07  4.65100872e+07]
+E1 = -706.5849321798701  E_coul = 198.94564234453657
+cycle= 1 E= -507.639289835333  delta_E= -3.72  |g|= 0.317  |ddm|= 0.301
+    CPU time for cycle= 1      0.01 sec, wall time      0.01 sec
+diis-norm(errvec)=0.420501
+diis-c [-0.17682113  1.        ]
+  HOMO = -0.236276575118712  LUMO = 86.394361736767
+  mo_energy =
+[-1.20262475e+02 -1.22530430e+01 -6.65306743e+00 -6.65306743e+00
+ -6.65306743e+00 -1.16348458e+00 -2.36276575e-01 -2.36276575e-01
+ -2.36276575e-01  8.63943617e+01  6.78599269e+02  3.93628357e+03
+  2.96207340e+04  1.54739920e+05  6.64893033e+05  2.71962902e+06
+  1.10459671e+07  4.65100881e+07]
+E1 = -706.5535010225527  E_coul = 198.91378329655515
+cycle= 2 E= -507.639717725998  delta_E= -0.000428  |g|= 0.00474  |ddm|= 0.0143
+    CPU time for cycle= 2      0.02 sec, wall time      0.02 sec
+diis-norm(errvec)=0.00504168
+diis-c [-2.53733014e-05 -5.06259892e-04  1.00050626e+00]
+  HOMO = -0.236451774901736  LUMO = 86.3908435800202
+  mo_energy =
+[-1.20271114e+02 -1.22542316e+01 -6.65490834e+00 -6.65490834e+00
+ -6.65490834e+00 -1.16354934e+00 -2.36451775e-01 -2.36451775e-01
+ -2.36451775e-01  8.63908436e+01  6.78588685e+02  3.93626769e+03
+  2.96207148e+04  1.54739900e+05  6.64893013e+05  2.71962900e+06
+  1.10459670e+07  4.65100881e+07]
+E1 = -706.5530608388187  E_coul = 198.9133430027451
+cycle= 3 E= -507.639717836074  delta_E= -1.1e-07  |g|= 9.48e-05  |ddm|= 0.000202
+    CPU time for cycle= 3      0.02 sec, wall time      0.02 sec
+diis-norm(errvec)=0.00012677
+diis-c [-3.95755563e-10  3.34164168e-05 -2.54629045e-02  1.02542949e+00]
+  HOMO = -0.23645398661671  LUMO = 86.3907989236711
+  mo_energy =
+[-1.20271227e+02 -1.22542473e+01 -6.65493530e+00 -6.65493530e+00
+ -6.65493530e+00 -1.16354999e+00 -2.36453987e-01 -2.36453987e-01
+ -2.36453987e-01  8.63907989e+01  6.78588568e+02  3.93626754e+03
+  2.96207146e+04  1.54739900e+05  6.64893013e+05  2.71962900e+06
+  1.10459670e+07  4.65100881e+07]
+E1 = -706.5530536012826  E_coul = 198.91333576516874
+cycle= 4 E= -507.639717836114  delta_E= -4.02e-11  |g|= 3.74e-07  |ddm|= 3.44e-06
+    CPU time for cycle= 4      0.01 sec, wall time      0.02 sec
+E1 = -706.5530536012826  E_coul = 198.91333576516874
+  HOMO = -0.236453970314514  LUMO = 86.3907992617131
+  mo_energy =
+[-1.20271226e+02 -1.22542472e+01 -6.65493514e+00 -6.65493514e+00
+ -6.65493514e+00 -1.16354999e+00 -2.36453970e-01 -2.36453970e-01
+ -2.36453970e-01  8.63907993e+01  6.78588569e+02  3.93626754e+03
+  2.96207146e+04  1.54739900e+05  6.64893013e+05  2.71962900e+06
+  1.10459670e+07  4.65100881e+07]
+E1 = -706.5530536382827  E_coul = 198.91333580216914
+Extra cycle  E= -507.639717836114  delta_E= 3.41e-13  |g|= 6.45e-09  |ddm|= 1.64e-08
+    CPU time for scf_cycle      0.10 sec, wall time      0.10 sec
+Set gradient conv threshold to 3.16228e-05
+cond(S) = 56.39526514662862
+E1 = -706.5530536382827  E_coul = 198.91333580216914
+init E= -507.639717836114
+    CPU time for initialize scf      0.42 sec, wall time      0.42 sec
+  HOMO = -0.236453970123855  LUMO = 86.3907992658432
+  mo_energy =
+[-1.20271226e+02 -1.22542472e+01 -6.65493513e+00 -6.65493513e+00
+ -6.65493513e+00 -1.16354999e+00 -2.36453970e-01 -2.36453970e-01
+ -2.36453970e-01  8.63907993e+01  6.78588569e+02  3.93626754e+03
+  2.96207146e+04  1.54739900e+05  6.64893013e+05  2.71962900e+06
+  1.10459670e+07  4.65100881e+07]
+E1 = -706.5530536388422  E_coul = 198.91333580272897
+cycle= 1 E= -507.639717836113  delta_E= 2.27e-13  |g|= 2.32e-10  |ddm|= 2.54e-10
+    CPU time for cycle= 1      0.01 sec, wall time      0.01 sec
+E1 = -706.5530536388422  E_coul = 198.91333580272897
+  HOMO = -0.236453970121168  LUMO = 86.3907992659027
+  mo_energy =
+[-1.20271226e+02 -1.22542472e+01 -6.65493513e+00 -6.65493513e+00
+ -6.65493513e+00 -1.16354999e+00 -2.36453970e-01 -2.36453970e-01
+ -2.36453970e-01  8.63907993e+01  6.78588569e+02  3.93626754e+03
+  2.96207146e+04  1.54739900e+05  6.64893013e+05  2.71962900e+06
+  1.10459670e+07  4.65100881e+07]
+E1 = -706.5530536388521  E_coul = 198.9133358027384
+Extra cycle  E= -507.639717836114  delta_E= -4.55e-13  |g|= 1.22e-10  |ddm|= 4.49e-12
+    CPU time for scf_cycle      1.42 sec, wall time      1.42 sec
+exp = [1.87954849e+07 4.69887121e+06 1.17471780e+06 2.93679451e+05
+ 7.34198654e+04 1.83539276e+04 2.23414241e+03 4.56889050e+02
+ 1.21733173e+02 3.75930612e+01 4.74127226e+00 3.91203585e-01
+ 8.59862972e+00 4.90848683e-01]
+grad_E = [-1.11279574e-13  1.80103145e-11  8.62825063e-12  1.05339886e-08
+ -3.42032848e-08  6.42104482e-06 -9.72129996e-06  4.03886447e-06
+  2.56130753e-07  1.52691770e-06 -2.20220571e-06 -3.67993289e-06
+  5.79483257e-06  4.30862030e-07]
+ message: Optimization terminated successfully
+ success: True
+  status: 0
+     fun: -507.6397178361135
+       x: [ 1.880e+07  4.699e+06 ...  8.599e+00  4.908e-01]
+     nit: 1
+     jac: [-1.113e-13  1.801e-11 ...  5.795e-06  4.309e-07]
+    nfev: 1
+    njev: 1
+#INFO: **** input file is /Users/vtan/basis-set-optimization/018_Ar/input.py ****
+#!/usr/bin/env python
+
+import pyscf
+from pyscfad import gto, scf
+import numpy as np
+import re
+
+from scipy import optimize
+
+VERBOSITY = 9
+
+def parse_basis_str(slug):
+    numbers_and_letters = re.findall(r'[A-Za-z]+|\d+', slug)
+    numbers_with_letters = [
+        [int(numbers_and_letters[i]), numbers_and_letters[i+1].capitalize()]
+        for i in range(0, len(numbers_and_letters), 2)
+    ]
+    return numbers_with_letters
+
+def decaying_nums(n):
+    return np.array([0.5 * (n - i) for i in range(n)])
+
+def get_basis_substring(exponent, orbital):
+    substring = f'''
+    Ar  {orbital}
+        {exponent}              1.0'''
+    return substring
+
+def get_basis_string(basis_str, exponents, exp_array=None):
+    basis_set = parse_basis_str(basis_str)
+    basis_nums = [num for [num, _] in basis_set]
+    basis_cum_nums = np.cumsum(basis_nums)
+
+    if exp_array is None:
+        exp_array = np.zeros((exponents.size, 2))
+
+    exp_array[np.where(exp_array[:, 1] == 0), 0] = exponents[np.where(exp_array[:, 1] == 0)]
+
+    basis_string = ''.join([''.join([
+        get_basis_substring(exp_array[i, 0], orbital) if j == 0 else
+        get_basis_substring(exp_array[i + basis_cum_nums[j-1], 0], orbital)
+        for i in range(num)
+    ]) for j, [num, orbital] in enumerate(basis_set)])
+
+    return basis_string
+
+def atomic_energy(exponents, basis_str, exp_array=None):
+    mol = gto.Mole()
+    mol.atom = 'Ar 0 0 0'  # in Angstrom
+
+    basis_string = get_basis_string(basis_str, exponents, exp_array)
+    mol.basis = {'Ar': pyscf.gto.basis.parse(basis_string)}
+
+    mol.verbose = VERBOSITY
+    mol.build()
+
+    mf = scf.RHF(mol)
+    e = mf.kernel()
+
+    print(f"exp = {exponents}")
+    print(f"E = {e}")
+
+    return e
+
+def grad_atomic_energy(exponents, basis_str, exp_array=None):
+    mol = gto.Mole()
+    mol.atom = 'Ar 0 0 0'  # in Angstrom
+
+    basis_string = get_basis_string(basis_str, exponents, exp_array)
+    mol.basis = {'Ar': pyscf.gto.basis.parse(basis_string)}
+    
+    mol.verbose = VERBOSITY
+    mol.build()
+
+    mf = scf.RHF(mol)
+    mf.kernel()
+    jac = mf.energy_grad()
+
+    print(f"exp = {exponents}")
+    print(f"grad_E = {jac.exp}")
+
+    grad_E = np.array(jac.exp)
+
+    return grad_E
+
+def minimize_energy(basis_str, exp_array=None):
+    x0 = exp_array[:, 0]
+    bnds = ((1e-9, None) for _ in range(exp_array.shape[0]))
+
+    res = optimize.minimize(
+        atomic_energy,
+        x0,
+        args=(basis_str, exp_array),
+        method="SLSQP",
+        jac=grad_atomic_energy,
+        hess=None,
+        hessp=None,
+        bounds=bnds,
+        tol=1e-9,
+        callback=None,
+        options={"maxfev": 10000, "ftol": 1e-9},
+    )
+    
+    print(res)
+    print(f"E = {atomic_energy(res.x, basis_str)}")
+    print(f"exp = [{','.join(['{:.16e}'.format(x) for x in res.x])}]")
+    
+exps = np.zeros((14, 2))
+#exps[:, 0] = decaying_nums(5)
+exps_old = np.array([4.6988712134173084e+06,1.1747178033543271e+06,2.9367945083858178e+05,7.3419865393677101e+04,1.8353927627435987e+04,2.2341424145819028e+03,4.5688904996449571e+02,1.2173317272260677e+02,3.7593061247508530e+01,4.7412722556720146e+00,3.9120358491841306e-01,8.5986297237246045e+00,4.9084868336327880e-01])
+exps[1:, 0] = exps_old[:]
+exps[0, 0] = np.max(exps_old) * 4.0
+
+basis = "12s2p"
+
+minimize_energy(basis, exps)
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Darwin', node='Vinnas-Air', release='19.6.0', version='Darwin Kernel Version 19.6.0: Tue Jun 21 21:18:39 PDT 2022; root:xnu-6153.141.66~1/RELEASE_X86_64', machine='x86_64', processor='i386')  Threads 1
+Python 3.8.8 (default, Apr 13 2021, 12:59:45) 
+[Clang 10.0.0 ]
+numpy 1.24.2  scipy 1.10.1
+Date: Sun Mar 12 00:08:58 2023
+PySCF version 2.1.1
+PySCF path  /Users/vtan/ve_pyscfad/lib/python3.8/site-packages/pyscf
+
+[CONFIG] DEBUG = False
+[CONFIG] MAX_MEMORY = 4000
+[CONFIG] TMPDIR = /var/folders/c6/fyjd84g92vqcf03tnvqp486c0000gn/T/
+[CONFIG] UNIT = angstrom
+[CONFIG] VERBOSE = 3
+[CONFIG] conf_file = /Users/vtan/.pyscf_conf.py
+[CONFIG] pyscf_numpy_backend = jax
+[CONFIG] pyscf_scipy_backend = jax
+[CONFIG] pyscf_scipy_linalg_backend = pyscfad
+[CONFIG] pyscfad = True
+[CONFIG] pyscfad_ccsd_implicit_diff = True
+[CONFIG] pyscfad_scf_implicit_diff = True
+[INPUT] verbose = 9
+[INPUT] max_memory = 4000 
+[INPUT] num. atoms = 1
+[INPUT] num. electrons = 18
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = angstrom
+[INPUT] Symbol           X                Y                Z      unit          X                Y                Z       unit  Magmom
+[INPUT]  1 Ar     0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr   0.0
+[INPUT] ---------------- BASIS SET ---------------- 
+[INPUT] l, kappa, [nprim/nctr], expnt,             c_1 c_2 ...
+[INPUT] Ar
+[INPUT] 0    0    [1    /1   ]  18795484.8537        1
+[INPUT] 0    0    [1    /1   ]  4698871.21342        1
+[INPUT] 0    0    [1    /1   ]  1174717.80335        1
+[INPUT] 0    0    [1    /1   ]  293679.450839        1
+[INPUT] 0    0    [1    /1   ]  73419.8653937        1
+[INPUT] 0    0    [1    /1   ]  18353.9276274        1
+[INPUT] 0    0    [1    /1   ]  2234.14241458        1
+[INPUT] 0    0    [1    /1   ]  456.889049964        1
+[INPUT] 0    0    [1    /1   ]  121.733172723        1
+[INPUT] 0    0    [1    /1   ]  37.5930612475        1
+[INPUT] 0    0    [1    /1   ]  4.74127225567        1
+[INPUT] 0    0    [1    /1   ]  0.391203584918       1
+[INPUT] 1    0    [1    /1   ]  8.59862972372        1
+[INPUT] 1    0    [1    /1   ]  0.490848683363       1
+
+nuclear repulsion = 0
+number of shells = 14
+number of NR pGTOs = 18
+number of NR cGTOs = 18
+basis = {'Ar': [[0, [18795484.853669234, 1.0]], [0, [4698871.213417308, 1.0]], [0, [1174717.803354327, 1.0]], [0, [293679.4508385818, 1.0]], [0, [73419.8653936771, 1.0]], [0, [18353.927627435987, 1.0]], [0, [2234.142414581903, 1.0]], [0, [456.8890499644957, 1.0]], [0, [121.73317272260677, 1.0]], [0, [37.59306124750853, 1.0]], [0, [4.741272255672015, 1.0]], [0, [0.39120358491841306, 1.0]], [1, [8.598629723724605, 1.0]], [1, [0.4908486833632788, 1.0]]]}
+ecp = {}
+bas 0, expnt(s) = [18795484.85366923]
+bas 1, expnt(s) = [4698871.21341731]
+bas 2, expnt(s) = [1174717.80335433]
+bas 3, expnt(s) = [293679.45083858]
+bas 4, expnt(s) = [73419.86539368]
+bas 5, expnt(s) = [18353.92762744]
+bas 6, expnt(s) = [2234.14241458]
+bas 7, expnt(s) = [456.88904996]
+bas 8, expnt(s) = [121.73317272]
+bas 9, expnt(s) = [37.59306125]
+bas 10, expnt(s) = [4.74127226]
+bas 11, expnt(s) = [0.39120358]
+bas 12, expnt(s) = [8.59862972]
+bas 13, expnt(s) = [0.49084868]
+CPU time:         8.69
+arg.atm = [[18 20  1 23  0  0]]
+arg.bas = [[ 0  0  1  1  0 24 25  0]
+ [ 0  0  1  1  0 26 27  0]
+ [ 0  0  1  1  0 28 29  0]
+ [ 0  0  1  1  0 30 31  0]
+ [ 0  0  1  1  0 32 33  0]
+ [ 0  0  1  1  0 34 35  0]
+ [ 0  0  1  1  0 36 37  0]
+ [ 0  0  1  1  0 38 39  0]
+ [ 0  0  1  1  0 40 41  0]
+ [ 0  0  1  1  0 42 43  0]
+ [ 0  0  1  1  0 44 45  0]
+ [ 0  0  1  1  0 46 47  0]
+ [ 0  1  1  1  0 48 49  0]
+ [ 0  1  1  1  0 50 51  0]]
+arg.env = [0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 0.00000000e+00 0.00000000e+00 0.00000000e+00 0.00000000e+00
+ 1.87954849e+07 7.21199097e+05 4.69887121e+06 2.54982386e+05
+ 1.17471780e+06 9.01498871e+04 2.93679451e+05 3.18727983e+04
+ 7.34198654e+04 1.12687362e+04 1.83539276e+04 3.98393079e+03
+ 2.23414241e+03 8.21009466e+02 4.56889050e+02 2.49673866e+02
+ 1.21733173e+02 9.25916301e+01 3.75930612e+01 3.83571025e+01
+ 4.74127226e+00 8.11775977e+00 3.91203585e-01 1.24973273e+00
+ 8.59862972e+00 4.29557150e+01 4.90848683e-01 1.19858525e+00]
+ecpbas  = []
+Set gradient conv threshold to 3.16228e-05
+Nelec from initial guess = 17.31997542584935
+cond(S) = 56.39526514662862
+E1 = -688.8312841655792  E_coul = 184.91537499636783
+init E= -503.915909169211
+    CPU time for initialize scf      0.02 sec, wall time      0.02 sec
+  HOMO = -0.680897819666845  LUMO = 85.0613322692788
+  mo_energy =
+[-1.21650495e+02 -1.32811426e+01 -7.62160364e+00 -7.62160364e+00
+ -7.62160364e+00 -1.65070622e+00 -6.80897820e-01 -6.80897820e-01
+ -6.80897820e-01  8.50613323e+01  6.77228652e+02  3.93503191e+03
+  2.96196452e+04  1.54738903e+05  6.64892046e+05  2.71962805e+06
+  1.10459661e+07  4.65100872e+07]
+E1 = -706.5849321798701  E_coul = 198.94564234453657
+cycle= 1 E= -507.639289835333  delta_E= -3.72  |g|= 0.317  |ddm|= 0.301
+    CPU time for cycle= 1      0.01 sec, wall time      0.02 sec
+diis-norm(errvec)=0.420501
+diis-c [-0.17682113  1.        ]
+  HOMO = -0.236276575118712  LUMO = 86.394361736767
+  mo_energy =
+[-1.20262475e+02 -1.22530430e+01 -6.65306743e+00 -6.65306743e+00
+ -6.65306743e+00 -1.16348458e+00 -2.36276575e-01 -2.36276575e-01
+ -2.36276575e-01  8.63943617e+01  6.78599269e+02  3.93628357e+03
+  2.96207340e+04  1.54739920e+05  6.64893033e+05  2.71962902e+06
+  1.10459671e+07  4.65100881e+07]
+E1 = -706.5535010225527  E_coul = 198.91378329655515
+cycle= 2 E= -507.639717725998  delta_E= -0.000428  |g|= 0.00474  |ddm|= 0.0143
+    CPU time for cycle= 2      0.02 sec, wall time      0.02 sec
+diis-norm(errvec)=0.00504168
+diis-c [-2.53733014e-05 -5.06259892e-04  1.00050626e+00]
+  HOMO = -0.236451774901736  LUMO = 86.3908435800202
+  mo_energy =
+[-1.20271114e+02 -1.22542316e+01 -6.65490834e+00 -6.65490834e+00
+ -6.65490834e+00 -1.16354934e+00 -2.36451775e-01 -2.36451775e-01
+ -2.36451775e-01  8.63908436e+01  6.78588685e+02  3.93626769e+03
+  2.96207148e+04  1.54739900e+05  6.64893013e+05  2.71962900e+06
+  1.10459670e+07  4.65100881e+07]
+E1 = -706.5530608388187  E_coul = 198.9133430027451
+cycle= 3 E= -507.639717836074  delta_E= -1.1e-07  |g|= 9.48e-05  |ddm|= 0.000202
+    CPU time for cycle= 3      0.02 sec, wall time      0.02 sec
+diis-norm(errvec)=0.00012677
+diis-c [-3.95755563e-10  3.34164168e-05 -2.54629045e-02  1.02542949e+00]
+  HOMO = -0.23645398661671  LUMO = 86.3907989236711
+  mo_energy =
+[-1.20271227e+02 -1.22542473e+01 -6.65493530e+00 -6.65493530e+00
+ -6.65493530e+00 -1.16354999e+00 -2.36453987e-01 -2.36453987e-01
+ -2.36453987e-01  8.63907989e+01  6.78588568e+02  3.93626754e+03
+  2.96207146e+04  1.54739900e+05  6.64893013e+05  2.71962900e+06
+  1.10459670e+07  4.65100881e+07]
+E1 = -706.5530536012826  E_coul = 198.91333576516874
+cycle= 4 E= -507.639717836114  delta_E= -4.02e-11  |g|= 3.74e-07  |ddm|= 3.44e-06
+    CPU time for cycle= 4      0.02 sec, wall time      0.02 sec
+E1 = -706.5530536012826  E_coul = 198.91333576516874
+  HOMO = -0.236453970314514  LUMO = 86.3907992617131
+  mo_energy =
+[-1.20271226e+02 -1.22542472e+01 -6.65493514e+00 -6.65493514e+00
+ -6.65493514e+00 -1.16354999e+00 -2.36453970e-01 -2.36453970e-01
+ -2.36453970e-01  8.63907993e+01  6.78588569e+02  3.93626754e+03
+  2.96207146e+04  1.54739900e+05  6.64893013e+05  2.71962900e+06
+  1.10459670e+07  4.65100881e+07]
+E1 = -706.5530536382827  E_coul = 198.91333580216914
+Extra cycle  E= -507.639717836114  delta_E= 3.41e-13  |g|= 6.45e-09  |ddm|= 1.64e-08
+    CPU time for scf_cycle      0.10 sec, wall time      0.11 sec
+exp = [1.87954849e+07 4.69887121e+06 1.17471780e+06 2.93679451e+05
+ 7.34198654e+04 1.83539276e+04 2.23414241e+03 4.56889050e+02
+ 1.21733173e+02 3.75930612e+01 4.74127226e+00 3.91203585e-01
+ 8.59862972e+00 4.90848683e-01]
+E = -507.6397178361135
+E = -507.6397178361135
+exp = [1.8795484853669234e+07,4.6988712134173084e+06,1.1747178033543271e+06,2.9367945083858178e+05,7.3419865393677101e+04,1.8353927627435987e+04,2.2341424145819028e+03,4.5688904996449571e+02,1.2173317272260677e+02,3.7593061247508530e+01,4.7412722556720146e+00,3.9120358491841306e-01,8.5986297237246045e+00,4.9084868336327880e-01]
