@@ -5,7 +5,7 @@ import re
 from scipy import optimize
 import numpy as np
 
-VERBOSITY = 0
+VERBOSITY = 9
 
 def parse_basis_str(slug):
     numbers_and_letters = re.findall(r'[A-Za-z]+|\d+', slug)
