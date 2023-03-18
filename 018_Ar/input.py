@@ -105,7 +105,10 @@ def minimize_energy(basis_str, exp_array=None):
     print(f"E = {atomic_energy(res.x, basis_str)}")
     print(f"exp = [{','.join(['{:.16e}'.format(x) for x in res.x])}]")
     
-exps = np.zeros((6, 2))
+number_of_s_exps = 4
+number_of_p_exps = 3
+
+exps = np.zeros((number_of_s_exps+number_of_p_exps,2))
 #exps[:, 0] = decaying_nums(5)
 
 # S
@@ -119,6 +122,6 @@ exps[3,0] = 3.0108199280832128e+01
 exps[4,0] = 6.1393781325590453e+00
 exps[5,0] = 4.8929328703550412e-01
 
-basis = "4s3p"
+basis =  str(number_of_s_exps)+"s"+str(number_of_p_exps)+"p"
 
 minimize_energy(basis, exps)
