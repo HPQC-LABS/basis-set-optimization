@@ -91,7 +91,7 @@ def minimize_energy(basis_str, exp_array=None):
         atomic_energy,
         x0,
         args=(basis_str, exp_array),
-        method="BFGS",
+        method="SLSQP",
         jac=grad_atomic_energy,
         hess=None,
         hessp=None,
@@ -105,12 +105,20 @@ def minimize_energy(basis_str, exp_array=None):
     print(f"E = {atomic_energy(res.x, basis_str)}")
     print(f"exp = [{','.join(['{:.16e}'.format(x) for x in res.x])}]")
     
-exps = np.zeros((11, 2))
+exps = np.zeros((6, 2))
 #exps[:, 0] = decaying_nums(5)
-exps_old = np.array([8.0e+05,1.8354961655666553e+04,2.2321569373256953e+03,4.5777843088607506e+02,1.2189136988757589e+02,3.7618460714610308e+01,4.7411562274897623e+00,3.9118886400018660e-01,8.5986702324693809e+00,4.9085158086350911e-01])
-exps[1:, 0] = exps_old[:]
-exps[0, 0] = np.max(exps_old) * 4.0
 
-basis = "9s2p"
+# S
+exps[0,0] = 20.0
+exps[1,0] = 9.5045827955887916e+01
+exps[2,0] = 4.4881042475048387e+00 
+exps[3,0] = 3.9799528004692630e-01
+             
+# P          
+exps[3,0] = 3.0108199280832128e+01
+exps[4,0] = 6.1393781325590453e+00
+exps[5,0] = 4.8929328703550412e-01
+
+basis = "4s3p"
 
 minimize_energy(basis, exps)
