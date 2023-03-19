@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 
-import pyscf
+import pyscf, re, os, numpy as np
 from pyscfad import gto, scf
-import numpy as np
-import re
 
 from scipy import optimize
 
+SOLVER = 'SLSQP'
 VERBOSITY = 9
 
 def parse_basis_str(slug):
@@ -91,7 +90,7 @@ def minimize_energy(basis_str, exp_array=None):
         atomic_energy,
         x0,
         args=(basis_str, exp_array),
-        method="SLSQP",
+        method=SOLVER,
         jac=grad_atomic_energy,
         hess=None,
         hessp=None,
@@ -105,23 +104,38 @@ def minimize_energy(basis_str, exp_array=None):
     print(f"E = {atomic_energy(res.x, basis_str)}")
     print(f"exp = [{','.join(['{:.16e}'.format(x) for x in res.x])}]")
     
-number_of_s_exps = 4
-number_of_p_exps = 3
+number_of_s_exps = 6
+number_of_p_exps = 10
 
 exps = np.zeros((number_of_s_exps+number_of_p_exps,2))
 #exps[:, 0] = decaying_nums(5)
 
-# S
-exps[0,0] = 20.0
-exps[1,0] = 9.5045827955887916e+01
-exps[2,0] = 4.4881042475048387e+00 
-exps[3,0] = 3.9799528004692630e-01
-             
-# P          
-exps[3,0] = 3.0108199280832128e+01
-exps[4,0] = 6.1393781325590453e+00
-exps[5,0] = 4.8929328703550412e-01
+exps=np.matrix('\
+7.6182507849929175e+03  0 ;\
+3.6182507849929175e+03  0 ;\
+1.6182507849929175e+03  0 ;\
+2.3978398735110531e+02  0 ;\
+5.1897914206496637e+01  0 ;\
+4.3870852942693928e+00  0 ;\
+1.3627930032386791e+03  1 ;\
+6.6518072575151780e+02  1 ;\
+3.0332064186335555e+02  1 ;\
+3.1614645606305231e+02  1 ;\
+4.9300144018458525e+01  1 ;\
+4.7537785732569198e+00  1 ;\
+1.4747293500057861e+01  1 ;\
+4.0328123273769173e-01  1 ;\
+1.2333383692864934e+00  1 ;\
+3.8716558480433622e-02  1  \
+')
+exps=np.array(exps)
 
 basis =  str(number_of_s_exps)+"s"+str(number_of_p_exps)+"p"
 
 minimize_energy(basis, exps)
+
+if np.max(exps[:,1]) ==1:
+    name = 'out_'+SOLVER+'-f_'+basis+'.job'
+else:    
+    name = 'out_'+SOLVER+'_'+basis+'.job'
+os.rename("out_and_err."+os.environ["SLURM_JOB_ID"],name+'.'+os.environ["SLURM_JOB_ID"])
