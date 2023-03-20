@@ -5,7 +5,7 @@ from pyscfad import gto, scf
 
 from scipy import optimize
 
-SOLVER = 'Nelder-Mead'
+SOLVER = 'SLSQP'
 VERBOSITY = 9
 
 def parse_basis_str(slug):
@@ -47,7 +47,7 @@ def atomic_energy(exponents, basis_str, exp_array=None):
     mol.basis = {'Ar': pyscf.gto.basis.parse(basis_string)}
     mol.verbose = VERBOSITY
     mol.build()
-    mf = scf.RHF(mol)
+    mf = mol.RHF().set(conv_tol=1e-6,max_cycle=999,direct_scf_tol=1e-6)
     e = mf.kernel()
     print(f"exp = {exponents}")
     print(f"E = {e}")
@@ -61,6 +61,10 @@ def grad_atomic_energy(exponents, basis_str, exp_array=None):
     mol.verbose = VERBOSITY
     mol.build()
     mf = scf.RHF(mol)
+    mf.conv_tol=1e-6
+    mf.max_cycle=999
+    mf.direct_scf_tol=1e-6
+#   mf = mol.RHF().set(conv_tol=1e-10,max_cycle=999,direct_scf_tol=1e-14)
     mf.kernel()
     jac = mf.energy_grad()
     print(f"exp = {exponents}")
@@ -77,12 +81,15 @@ def minimize_energy(basis_str, exp_array=None):
         args=(basis_str, exp_array),
         method=SOLVER,
         jac=grad_atomic_energy,
+#       jac=None,
         hess=None,
         hessp=None,
         bounds=bnds,
-        tol=1e-13,
+        tol=1e-18,
         callback=None,
-        options={"maxfev": 10000, "ftol": 1e-10},
+#       options={"maxfev": 10000, "ftol": 1e-10},                                       # L-BFGS-B?
+#       options={"return_all": True, "xatol": 1e-16, "fatol": 1e-16, "adaptive": True}, # Nelder-Mead
+        options={"disp": True, "ftol": 1e-18},                                          # SLSQP
     )
     print(res)
     print(f"Final energy = {atomic_energy(res.x, basis_str)}")
@@ -95,31 +102,31 @@ exps = np.zeros((number_of_s_exps+number_of_p_exps,2))
 #exps[:, 0] = decaying_nums(5)
 
 exps=np.matrix('\
-553443.07887896 0 ;\
-88097.43848988  0 ;\
-21527.90787686  0 ;\
-905.67284079    0 ;\
-6652.52600651   0 ;\
-2345.47638154   0 ;\
-367.18677893    0 ;\
-151.2057879     0 ;\
-63.4933354      0 ;\
-27.14624137     0 ;\
-8.89046117      0 ;\
-3.90630183      0 ;\
-1.74380611      0 ;\
-0.60349363      0 ;\
-0.21667994      0 ;\
-1362.10974035   0 ;\
-324.06753199    0 ;\
-40.00847179     0 ;\
-105.3809149     0 ;\
-16.59082098     0 ;\
-3.12845673      0 ;\
-7.15220658      0 ;\
-0.46206191      0 ;\
-1.20115777      0 ;\
-0.15913117      0  \
+566609.64273916 0 ;\
+85269.17592025  0 ;\
+19414.23221489  0 ;\
+649.97373154    0 ;\
+5500.9711461    0 ;\
+1796.1747955    0 ;\
+254.22541422    0 ;\
+105.54788218    0 ;\
+46.01761449     0 ;\
+20.72317977     0 ;\
+7.84057149      0 ;\
+3.37226743      0 ;\
+1.34579684      0 ;\
+0.54948773      0 ;\
+0.20209647      0 ;\
+1257.84441847   0 ;\
+298.16111632    0 ;\
+35.98611499     0 ;\
+96.01174829     0 ;\
+14.70392059     0 ;\
+2.72985151      0 ;\
+6.26207888      0 ;\
+0.39299234      0 ;\
+1.02953736      0 ;\
+0.1401009       0  \
 ')
 exps=np.array(exps)
 
