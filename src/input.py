@@ -32,8 +32,9 @@ def get_basis_string(basis_str, exponents, exp_array=None):
     if exp_array is None:
         exp_array = np.zeros((exponents.size, 2))
 
-    exp_array[np.where(exp_array[:, 1] == 0), 0] = exponents[np.where(exp_array[:, 1] == 0)]
+    exp_array[np.where(exp_array[:, 1] == 0), 0] = exponents[:]
 
+    print(exp_array[:, 0])
     basis_string = ''.join([''.join([
         get_basis_substring(exp_array[i, 0], orbital) if j == 0 else
         get_basis_substring(exp_array[i + basis_cum_nums[j-1], 0], orbital)
@@ -64,18 +65,18 @@ def atomic_energy(
     if return_J is True:
         jac = mf.energy_grad()
         grad_E = np.array(jac.exp)
+        grad_E = grad_E[np.where(exp_array[:, 1] == 0)]
         return e, grad_E
 
-def minimize_energy(mol, basis_str, exp_array=None, use_Jacobian=True):
-    x0 = exp_array[:, 0]
-    print(x0)
-    bnds = ((1e-9, None) for _ in range(exp_array.shape[0]))
+def minimize_energy(mol, basis_str, exp_array=None, use_Jacobian=False):
+    x0 = exp_array[np.where(exp_array[:, 1] == 0), 0]
+    bnds = ((1e-9, None) for _ in range(x0.size))
 
     res = optimize.minimize(
         atomic_energy,
         x0,
         args=(mol, basis_str, exp_array, use_Jacobian),
-        method="SLSQP",
+        method="Nelder-Mead",
         jac=use_Jacobian,
         hess=None,
         hessp=None,
@@ -116,5 +117,8 @@ if __name__ == "__main__":
     
     exps = np.zeros((N, 2))
     exps[:, 0] = np.array([0.5 * (N - i) for i in range(N)])
+
+    # freeze exponent 1
+    exps[0, 1] = 1
 
     minimize_energy(mol, basis, exps)
